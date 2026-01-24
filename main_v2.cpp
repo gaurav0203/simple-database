@@ -1,6 +1,7 @@
 /*
 simple database
 - storing information in binary instead of txt and using struct
+- adding soft delete feature
 */
 
 #include <iostream>
@@ -14,6 +15,7 @@ struct Employee
     int id;
     char name[50]; // fixed buffer. strings are apparently harder?
     double salary;
+    bool isValid;
 };
 
 std::map<int, long> indexMap; // maps emp.id to location of details in data.bin
@@ -31,7 +33,10 @@ void buildIndex()
 
     while (file.read(reinterpret_cast<char *>(&tempEmp), sizeof(Employee)))
     {
-        indexMap[tempEmp.id] = location;
+        if (tempEmp.isValid)
+        {
+            indexMap[tempEmp.id] = location;
+        }
         location = file.tellg();
     }
     file.close();
@@ -57,7 +62,7 @@ int main()
         if (command == "SET")
         {
             std::cin >> emp.id >> std::setw(50) >> emp.name >> emp.salary;
-
+            emp.isValid = true;
             // open file in binary + append mode
             std::ofstream file("data.bin", std::ios::binary | std::ios::app);
 
@@ -88,7 +93,7 @@ int main()
                     // random access jump to the index
                     file.seekg(indexMap[searchId], std::ios::beg);
 
-                    if (file.read(reinterpret_cast<char *>(&emp), sizeof(Employee)))
+                    if (file.read(reinterpret_cast<char *>(&emp), sizeof(Employee)) && emp.isValid)
                     {
                         std::cout << "ID: " << emp.id << ", Name: " << emp.name << ", Salary: " << emp.salary << "\n";
                     }
@@ -97,6 +102,35 @@ int main()
                         std::cout << "Record not found (index out of bounds)\n";
                     }
                     file.close();
+                }
+            }
+        }
+        else if (command == "DELETE")
+        {
+            int deleteId;
+            std::cin >> deleteId;
+            if (indexMap.find(deleteId) == indexMap.end())
+            {
+                std::cout << "Id not found.\n";
+            }
+            else
+            {
+                long location = indexMap[deleteId];
+                std::fstream file("data.bin", std::ios::binary | std::ios::in | std::ios::out);
+
+                if (file.is_open())
+                {
+                    file.seekg(location, std::ios::beg);
+                    file.read(reinterpret_cast<char *>(&emp), sizeof(Employee));
+
+                    emp.isValid = false;
+
+                    file.seekp(location, std::ios::beg);
+                    file.write(reinterpret_cast<char *>(&emp), sizeof(Employee));
+                    file.close();
+
+                    indexMap.erase(deleteId);
+                    std::cout << "Record with Id: " << deleteId << " is deleted.\n";
                 }
             }
         }
