@@ -1,0 +1,5 @@
+*.bin
+*.o
+*.out
+*.exe
+db_run
