@@ -1,12 +1,15 @@
 /*
 - key value store with dynamic size based on header
 - implementing serializer logic to support multiple datatypes
+- adding mutex to enable safe multi-threading
 */
 #include <iostream>
 #include <string>
 #include <map>
 #include <fstream>
 #include <cstdint>
+#include <vector>
+#include <mutex>
 
 template <typename T>
 struct Serializer
@@ -63,6 +66,7 @@ class Database
 private:
     std::map<K, long> indexMap;
     std::string filename;
+    std::mutex dbMutex;
 
     void rebuildIndex()
     {
@@ -95,6 +99,7 @@ public:
     }
     bool add(const K &key, const V &value)
     {
+        std::lock_guard<std::mutex> lock(dbMutex);
         RecordHeader rh;
         rh.keySize = Serializer<K>::size(key);
         rh.valSize = Serializer<V>::size(value);
@@ -115,8 +120,9 @@ public:
         return true;
     }
 
-    bool get(K &key, V &value)
+    bool get(const K &key, V &value)
     {
+        std::lock_guard<std::mutex> lock(dbMutex);
         if (indexMap.find(key) == indexMap.end())
         {
             std::cout << "Key not found!\n";
@@ -146,6 +152,7 @@ public:
 
     bool remove(const K &key)
     {
+        std::lock_guard<std::mutex> lock(dbMutex);
         if (indexMap.find(key) == indexMap.end())
         {
             std::cout << "No record found \n";
@@ -174,6 +181,7 @@ public:
 
     bool compact()
     {
+        std::lock_guard<std::mutex> lock(dbMutex);
         std::ifstream inFile(filename, std::ios::binary);
         std::ofstream outFile("temp.bin", std::ios::binary);
         if (!inFile.is_open() || !outFile.is_open())
@@ -197,7 +205,7 @@ public:
             }
             else
             {
-                inFile.seekg(rh.keySize + r.valSize, std::ios::cur);
+                inFile.seekg(rh.keySize + rh.valSize, std::ios::cur);
             }
             originalCount++;
         }
