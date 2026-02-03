@@ -143,6 +143,87 @@ public:
             return true;
         }
     }
+
+    bool remove(const K &key)
+    {
+        if (indexMap.find(key) == indexMap.end())
+        {
+            std::cout << "No record found \n";
+            return false;
+        }
+
+        std::fstream file(filename, std::ios::binary | std::ios::in | std::ios::out);
+
+        if (!file.is_open())
+        {
+            return false;
+        }
+
+        file.seekg(indexMap[key], std::ios::beg);
+        RecordHeader rh;
+        file.read(reinterpret_cast<char *>(&rh), sizeof(RecordHeader));
+        rh.isValid = false;
+        file.seekp(indexMap[key], std::ios::beg);
+        file.write(reinterpret_cast<char *>(&rh), sizeof(RecordHeader));
+
+        file.close();
+        indexMap.erase(key);
+
+        return true;
+    }
+
+    bool compact()
+    {
+        std::ifstream inFile(filename, std::ios::binary);
+        std::ofstream outFile("temp.bin", std::ios::binary);
+        if (!inFile.is_open() || !outFile.is_open())
+        {
+            return false;
+        }
+        int originalCount = 0;
+        int newCount = 0;
+        RecordHeader rh;
+        while (inFile.read(reinterpret_cast<char *>(&rh), sizeof(RecordHeader)))
+        {
+            if (rh.isValid)
+            {
+                newCount++;
+                uint32_t totalSize = rh.keySize + rh.valSize;
+                std::vector<char> buffer(totalSize);
+
+                outFile.write(reinterpret_cast<char *>(&rh), sizeof(RecordHeader));
+                inFile.read(&buffer[0], totalSize);
+                outFile.write(&buffer[0], totalSize);
+            }
+            else
+            {
+                inFile.seekg(rh.keySize + r.valSize, std::ios::cur);
+            }
+            originalCount++;
+        }
+
+        inFile.close();
+        outFile.close();
+
+        if (std::remove(filename.c_str()) != 0)
+        {
+            std::cout << "Failed to remove old file...\n";
+            return false;
+        }
+
+        if (std::rename("temp.bin", filename.c_str()) != 0)
+        {
+            std::cout << "Failed to rename new file...\n";
+            return false;
+        }
+
+        std::cout << "Rebuilding index for new file layout...\n";
+        indexMap.clear();
+        rebuildIndex();
+
+        std::cout << "Removed: " << originalCount - newCount << " zombine records. Done!\n";
+        return true;
+    }
 };
 int main()
 {
